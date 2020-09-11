@@ -38,7 +38,7 @@ class GMVAE_runner():
             n_classes = self.args.n_classes)
         if self.args.gpu_list is not None:
             if len(self.args.gpu_list.split(',')) > 1:
-                model = torch.nn.DataParallel(model)
+                model = torch.nn.DataParallel(model).cuda()
             else:
                 model = model.cuda()
         if isinstance(model, torch.nn.DataParallel):
