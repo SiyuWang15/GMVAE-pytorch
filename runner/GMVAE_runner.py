@@ -90,7 +90,7 @@ class GMVAE_runner():
                     test_loss = model.ELBO(test_X)
 
                     acc = self.test_accuracy(model, test_loader)
-                    logging.info('loss: {:.2}, test loss: {:.2}, acc: {:.3}'.format(loss.item(), test_loss.item(), acc))
+                    logging.info('loss: {:.2f}, test loss: {:.2f}, acc: {:.3f}'.format(loss.item(), test_loss.item(), acc))
 
                     
 
