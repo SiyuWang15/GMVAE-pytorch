@@ -13,6 +13,8 @@ def arg_parser():
     parser.add_argument('--optimizer', type = str, default = 'Adam')
     parser.add_argument('--w_dim', type = int, default=32)
     parser.add_argument('--h_dim', type = int, default=32)
+    parser.add_argument('--n_classes', type = int, default = 16)
+    parser.add_argument('--M', type = int, default = 1)
     parser.add_argument('--seed', type=int, default=1234, help='Random seed')
     parser.add_argument('--test', action='store_true', help='Whether to test the model')
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
@@ -29,7 +31,6 @@ def arg_parser():
     
     if args.dataset == 'mnist':
         args.v_dim = 784
-        args.n_classes = 10
     args.run = os.path.join('./run', args.run)
     args.datapath = './datasets/'
     args.log = os.path.join(args.run, time.strftime('%H-%M-%S', time.localtime()))
@@ -57,6 +58,7 @@ def main():
     logger.setLevel(level)
     logging.info('Using GPU {}'.format(args.gpu_list))
     logging.info('Loging in {}'.format(args.log))
+    logging.info(args)
 
     runner = GMVAE_runner(args)
     runner.train()
