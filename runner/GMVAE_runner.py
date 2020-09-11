@@ -13,6 +13,10 @@ from torchvision import datasets, transforms
 from torch.utils.data import DataLoader, Subset
 from model.GMVAE import GMVAE
 import logging
+import sys
+sys.path.append('..')
+from utils.draw import draw_grid
+
 
 
 class GMVAE_runner():
@@ -89,8 +93,28 @@ class GMVAE_runner():
                     val_losses.append(test_loss.item())
                     tb_logger.add_scalar('loss', loss, global_step = step)
                     tb_logger.add_scalar('test_loss', test_loss, global_step = step)
+                
+                if step % self.args.draw_freq == 0:
+                    self.test_cluster(model, step)
+                
+                if step % self.args.save_freq == 0:
+                    ckpt_path = os.path.join(self.args.ckpt_dir, 'checkpoint{}k.pth'.format(step // 1000))
+                    torch.save(model.state_dict(), ckpt_path)
+                    logging.info('checkpoint{}k.pth saved!'.format(step // 1000))
+                    
 
-
+    def test_cluster(self, model, step):
+        model.eval()
+        N_sample = 10
+        X_list = list()
+        for c in range(self.args.n_classes):
+            w_sample = torch.randn(N_sample, self.args.w_dim).cuda()
+            h_sample, _ = model.P.gen_h(w_sample, c)
+            X, _ = model.P.gen_v(h_sample)
+            X_list.append(X.reshape(N_sample, 1, 28, 28))
+        X_sample = torch.cat(X_list).cpu()
+        draw_grid(X_sample, os.path.join(self.args.img_dir, 'grid{}.png'.format(step)))
+        logging.info('grid{}.png saved!'.format(step))
 
 
     def test(self):

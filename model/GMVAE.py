@@ -26,7 +26,8 @@ class GMVAE(nn.Module):
         kl_loss_c = self.kl_c_loss(logits_c)
         kl_loss_w = self.kl_w_loss(w_mean, w_logstd)
         kl_loss_h = self.kl_h_loss(h_mean, h_logstd, w_sample, logits_c)
-        print('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), kl_loss_w.mean().item(), kl_loss_c.mean().item()))
+        # print('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), \
+            # kl_loss_w.mean().item(), kl_loss_c.mean().item()))
         loss = recon_loss + kl_loss_c + kl_loss_h + kl_loss_w
         loss = torch.mean(loss)
         return loss

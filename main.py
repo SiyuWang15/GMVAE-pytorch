@@ -17,10 +17,12 @@ def arg_parser():
     parser.add_argument('--test', action='store_true', help='Whether to test the model')
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
     parser.add_argument('--verbose', type = str, default = 'info')
-    parser.add_argument('--gpu_list', type = str, default = '0')
+    parser.add_argument('--gpu_list', type = str, default = '0,1,2,3')
     parser.add_argument('--batch_size', type = int, default=128)
     parser.add_argument('--n_epochs', type = int, default=10)
     parser.add_argument('--test_freq', type = int, default=100)
+    parser.add_argument('--draw_freq', type = int, default = 100)
+    parser.add_argument('--save_freq', type = int, default = 1000)
     parser.add_argument('--lr', type=float, default = 0.001)
     parser.add_argument('--weight_decay', type=float, default=0.00)
     args = parser.parse_args()
@@ -31,12 +33,14 @@ def arg_parser():
     args.run = os.path.join('./run', args.run)
     args.datapath = './datasets/'
     args.log = os.path.join(args.run, time.strftime('%H-%M-%S', time.localtime()))
+    args.img_dir = os.path.join(args.log, 'image')
+    args.ckpt_dir = args.log
     return args
     
 
 def main():
     args = arg_parser()
-    os.makedirs(args.log)
+    os.makedirs(args.img_dir)
 
     level = getattr(logging, args.verbose.upper(), None)
     if not isinstance(level, int):
@@ -52,6 +56,7 @@ def main():
     logger.addHandler(handler2)
     logger.setLevel(level)
     logging.info('Using GPU {}'.format(args.gpu_list))
+    logging.info('Loging in {}'.format(args.log))
 
     runner = GMVAE_runner(args)
     runner.train()
