@@ -88,11 +88,16 @@ class GMVAE_runner():
                     test_X = test_X.cuda()
                     model.eval()
                     test_loss = model.ELBO(test_X)
-                    logging.info('loss: {}, test loss: {}'.format(loss.item(), test_loss.item()))
+
+                    acc = self.test_accuracy(model, test_loader)
+                    logging.info('loss: {:.2}, test loss: {:.2}, acc: {:.3}'.format(loss.item(), test_loss.item(), acc))
+
+                    
 
                     val_losses.append(test_loss.item())
                     tb_logger.add_scalar('loss', loss, global_step = step)
                     tb_logger.add_scalar('test_loss', test_loss, global_step = step)
+                    tb_logger.add_scalar('test_acc', acc, global_step = step)
                 
                 if step % self.args.draw_freq == 0:
                     self.test_cluster(model, step)
@@ -117,5 +122,22 @@ class GMVAE_runner():
         logging.info('grid{}.png saved!'.format(step))
 
 
-    def test(self):
-        pass
+    def test_accuracy(self, model, test_loader):
+        q_c_v = list()
+        labels = np.array([])
+
+        for i, (val_x, val_y) in enumerate(test_loader):
+            val_x = val_x.cuda()
+            pred = model.Q(val_x) # [bs, n_classes]
+            q_c_v.append(pred.detach().cpu().numpy())
+            labels = np.concatenate([labels, val_y])
+        q_c_v = np.concatenate(q_c_v, axis = 0)
+        # labels: [len(test_loader), 1]  q_c_v: [len(test_loader), n_classes]
+        ind = np.argmax(q_c_v, axis = 0)
+        cluster_to_label = labels[ind]
+        pred_cluster = np.argmax(q_c_v, axis = 1)
+        pred_class = pred_cluster
+        for i, p in enumerate(pred_cluster):
+            pred_class[i] = cluster_to_label[p]
+        acc = np.sum(pred_class == labels) / len(labels)
+        return acc

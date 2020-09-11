@@ -83,5 +83,7 @@ class InferenceNet(nn.Module):
         sample = mean + torch.randn_like(mean) * (logstd * 2).exp()
         return sample
     
-    def forward(slef, X):
-        return infer_h(X)
+    def forward(self, X):
+        h, *_ = self.infer_h(X)
+        w, *_ = self.infer_w(X)
+        return self.infer_c(w, h)

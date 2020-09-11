@@ -19,7 +19,7 @@ class GMVAE(nn.Module):
     def ELBO(self, X):
         h_mean, h_logstd, h_sample = self.Q.infer_h(X)
         w_mean, w_logstd, w_sample = self.Q.infer_w(X)  # logstd = log(sigma) / 2.0
-        logits_c = self.Q.infer_c(h_sample, w_sample)
+        logits_c = self.Q.infer_c(w_sample, h_sample)
         # lam = 0.01
 
         recon_loss = self.recon_loss(h_sample, X)

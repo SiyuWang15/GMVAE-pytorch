@@ -21,7 +21,7 @@ def arg_parser():
     parser.add_argument('--batch_size', type = int, default=128)
     parser.add_argument('--n_epochs', type = int, default=10)
     parser.add_argument('--test_freq', type = int, default=100)
-    parser.add_argument('--draw_freq', type = int, default = 100)
+    parser.add_argument('--draw_freq', type = int, default = 1000)
     parser.add_argument('--save_freq', type = int, default = 1000)
     parser.add_argument('--lr', type=float, default = 0.001)
     parser.add_argument('--weight_decay', type=float, default=0.00)
