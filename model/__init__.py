@@ -1,1 +1,1 @@
-__all__ = ['GMVAE', 'Q_NET', 'P_NET']
+__all__ = ['GMVAE', 'Q_NET', 'P_NET', 'P_NET_v2', 'GMVAE_v2']

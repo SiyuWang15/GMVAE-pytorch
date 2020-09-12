@@ -79,8 +79,11 @@ class InferenceNet(nn.Module):
         return c
     
     def sample(self, mean, logstd, n_particle = 1):
-        assert n_particle == 1
-        sample = mean + torch.randn_like(mean) * (logstd * 2).exp()
+        # mean, logstd: [bs, sample_dim]
+        eps = torch.randn_like(mean.expand(n_particle, -1, -1))
+        # eps [n_particle, bs, sample_dim]
+        sample = mean + eps * (logstd * 2).exp()
+        # sample [n_particle, bs, sample_dim]
         return sample
     
     def forward(self, X):

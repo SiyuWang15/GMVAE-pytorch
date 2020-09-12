@@ -78,7 +78,7 @@ class GMVAE_runner():
                 step += 1
                 model.train()
                 X = X.cuda()
-                loss = model.ELBO(X)
+                loss = model.ELBO(X, self.args.M)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -87,7 +87,7 @@ class GMVAE_runner():
                     test_X, _ = next(test_iter)
                     test_X = test_X.cuda()
                     model.eval()
-                    test_loss = model.ELBO(test_X)
+                    test_loss = model.ELBO(test_X, M)
 
                     acc = self.test_accuracy(model, test_loader)
                     logging.info('step: {} || loss: {:.2f}, test loss: {:.2f}, acc: {:.3f}'.format(step, loss.item(), test_loss.item(), acc))
