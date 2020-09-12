@@ -51,7 +51,7 @@ class GMVAE(nn.Module):
     def kl_c_loss(self, c_logits):
         # logits [bs, num_classes]
         kl = c_logits * (torch.log(c_logits + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
-        kl = torch.mean(kl, axis = -1)
+        kl = torch.sum(kl, axis = -1)
         return kl 
 
     def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_logits):
