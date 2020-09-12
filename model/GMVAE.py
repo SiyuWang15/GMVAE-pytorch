@@ -20,7 +20,7 @@ class GMVAE(nn.Module):
         h_mean, h_logstd, h_sample = self.Q.infer_h(X, n_particle = M)  # h_sample: [M, batch_size, h_dim]
         w_mean, w_logstd, w_sample = self.Q.infer_w(X, n_particle = M)  # logstd = log(sigma) / 2.0 w_sample: [M, bs, w_dim]
         # logits_c = self.Q.infer_c(w_sample, h_sample)
-        prob_c = self.P.infer_c(w_sample, h_sample)
+        prob_c = self.P.infer_c(w_sample, h_sample) # [M, bs, n_classes]
         # print(h_sample.shape, w_sample.shape, prob_c.shape)
         # print(torch.sum(prob_c, axis = -1))
         # exit()
@@ -30,12 +30,12 @@ class GMVAE(nn.Module):
         kl_loss_c = self.kl_c_loss(prob_c)
         kl_loss_w = self.kl_w_loss(w_mean, w_logstd)
         kl_loss_h = self.kl_h_loss(h_mean, h_logstd, w_sample, prob_c)
-        # print('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), \
+        # print(recon_loss.shape, kl_loss_c.shape, kl_loss_w.shape, kl_loss_h.shape)
+        # logging.info('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), \
             # kl_loss_w.mean().item(), kl_loss_c.mean().item()))
         loss = recon_loss + kl_loss_c + kl_loss_h + kl_loss_w
         loss = torch.mean(loss)
         return loss
-
 
     def recon_loss(self, h_sample, X, type = 'bernoulli'):
         if type is 'gaussian':
@@ -54,21 +54,21 @@ class GMVAE(nn.Module):
         return kl
     
     def kl_c_loss(self, c_prob):
-        # logits [bs, num_classes]
+        # c_prob [M, bs, num_classes]
         kl = c_prob * (torch.log(c_prob + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
-        kl = torch.mean(kl, axis = -1)
+        kl = torch.mean(torch.sum(kl, axis = -1), axis = 0)
         return kl 
 
-    def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_logits):
+    def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_prob):
         # c_logits: [bs, num_classes]
         # w_sample: [M, bs, w_dim]
         # q_h_v_mean, q_h_v_logstd: [bs, h_dim] 
 
-        def kl_loss(q_h_v_mean, q_h_v_logstd, p_h_wc_mean, p_h_wc_logstd):
-            kl = (q_h_v_logstd * 2 - p_h_wc_logstd * 2).exp() - 1.0 - q_h_v_logstd * 2 + p_h_wc_logstd * 2
-            kl += torch.pow((q_h_v_mean - p_h_wc_mean), 2) / (p_h_wc_logstd * 2).exp()
-            kl = kl * 0.5
-            return torch.sum(kl, axis = -1, keepdim = True)  #[bs, 1]
+        # def kl_loss(q_h_v_mean, q_h_v_logstd, p_h_wc_mean, p_h_wc_logstd):
+        #     kl = (q_h_v_logstd * 2 - p_h_wc_logstd * 2).exp() - 1.0 - q_h_v_logstd * 2 + p_h_wc_logstd * 2
+        #     kl += torch.pow((q_h_v_mean - p_h_wc_mean), 2) / (p_h_wc_logstd * 2).exp()
+        #     kl = kl * 0.5
+        #     return torch.sum(kl, axis = -1, keepdim = True)  #[bs, 1]
         M, bs, _ = w_sample.shape
         c = torch.eye(self.n_classes).expand(M, bs, -1, -1) # [M, bs, n_classes, n_classes]
         w_sample = w_sample.unsqueeze(2).expand(-1,-1,self.n_classes,-1)
@@ -81,9 +81,9 @@ class GMVAE(nn.Module):
         kl += torch.pow((q_h_v_mean - h_wc_mean), 2) / (h_wc_logstd * 2).exp()
         kl = torch.sum(kl, axis = -1) * 0.5 # [M, bs, n_classes]
 
-        kl = torch.sum(kl * c_logits, axis = -1)
+        kl = torch.sum(kl * c_prob, axis = -1)
 
-        return torch.sum(kl, axis = 0)
+        return torch.mean(kl, axis = 0)
 
 
     def forward(self, X):

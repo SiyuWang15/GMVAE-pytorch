@@ -51,6 +51,15 @@ class GenerationNet(nn.Module):
             nn.Linear(512, h_dim)
         )
 
+        self.Pc_wh = nn.Sequential(
+            nn.Linear(w_dim + h_dim, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, n_classes), 
+            nn.Softmax(dim = -1)
+        )
+
         # P(v|h)
         self.Pv_h_mean = nn.Sequential(
             nn.Linear(h_dim, 512), 
@@ -67,19 +76,29 @@ class GenerationNet(nn.Module):
             nn.Linear(512, v_dim)
         )
 
+
     def infer_c(self, w_sample, h_sample):
         # w, h : [M, bs, w_dim or h_dim]
-        M, bs, _ = w_sample.shape
-        w_sample = w_sample.unsqueeze(2).expand(-1,-1,self.n_classes,-1) # w: [M, bs, n_classes, w_dim]
-        h_sample = h_sample.unsqueeze(2).expand(-1,-1,self.n_classes,-1)
-        c = torch.eye(self.n_classes).expand(M, bs, -1, -1).cuda() # c: [M, bs, n_classes, n_classes]
-        h_mean, h_logstd = self.gen_h(w_sample, c)  # [M, bs, n_classes, h_dim]
-        ph_wc = torch.pow(h_sample - h_mean, 2) / (h_logstd * 2).exp()
-        ph_wc = torch.sum(ph_wc, axis = -1) / 2. # [M, bs, n_classes]
-        ph_wc = ph_wc.exp() / torch.sqrt(torch.sum(h_logstd * 2, axis = -1).exp())
-        probs = torch.sum(ph_wc, axis = -1, keepdim = True).expand(-1,-1,self.n_classes)
-        probs = ph_wc / probs
-        return torch.mean(probs, axis = 0)
+        concat = torch.cat([w_sample, h_sample], axis = -1)
+        prob_c = self.Pc_wh(concat)
+        return prob_c
+    # def infer_c(self, w_sample, h_sample):
+    #     # w, h : [M, bs, w_dim or h_dim]
+    #     M, bs, _ = w_sample.shape
+    #     w_sample = w_sample.unsqueeze(2).expand(-1,-1,self.n_classes,-1) # w: [M, bs, n_classes, w_dim]
+    #     h_sample = h_sample.unsqueeze(2).expand(-1,-1,self.n_classes,-1)
+    #     c = torch.eye(self.n_classes).expand(M, bs, -1, -1).cuda() # c: [M, bs, n_classes, n_classes]
+    #     h_mean, h_logstd = self.gen_h(w_sample, c)  # [M, bs, n_classes, h_dim]
+    #     ph_wc = torch.pow(h_sample - h_mean, 2) / (h_logstd * 2).exp()
+    #     ph_wc = - torch.sum(ph_wc, axis = -1) / 2. -torch.sum(h_logstd, axis = -1) # [M, bs, n_classes]
+    #     # ph_wc = ph_wc.exp() / torch.sqrt(torch.sum(h_logstd * 2, axis = -1).exp())
+    #     # ph_wc = ph_wc - torch.sum(h_logstd, axis = -1)
+
+    #     # print(torch.max(ph_wc, axis = -1).values)
+    #     ph_wc = nn.Softmax(dim = -1)(ph_wc)
+    #     probs = torch.sum(ph_wc, axis = -1, keepdim = True).expand(-1,-1,self.n_classes)
+    #     probs = ph_wc / probs
+    #     return torch.mean(probs, axis = 0)
     
     def gen_h(self, w, c):
         concat = torch.cat([w, c], axis = -1)

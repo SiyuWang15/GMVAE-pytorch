@@ -73,11 +73,6 @@ class InferenceNet(nn.Module):
         w_sample = self.sample(w_mean, w_var, n_particle)
         return w_mean, w_var, w_sample
     
-    def infer_c(self, w, h):
-        cat = torch.cat([w, h], axis = -1)
-        c = self.Qc_wh(cat)
-        return c
-    
     def sample(self, mean, logstd, n_particle = 1):
         # mean, logstd: [bs, sample_dim]
         eps = torch.randn_like(mean.expand(n_particle, -1, -1))
@@ -89,4 +84,4 @@ class InferenceNet(nn.Module):
     def forward(self, X):
         h, *_ = self.infer_h(X)
         w, *_ = self.infer_w(X)
-        return self.infer_c(w, h)
+        return h, w

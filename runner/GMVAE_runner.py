@@ -87,7 +87,7 @@ class GMVAE_runner():
                     test_X, _ = next(test_iter)
                     test_X = test_X.cuda()
                     model.eval()
-                    test_loss = model.ELBO(test_X, M)
+                    test_loss = model.ELBO(test_X, self.args.M)
 
                     acc = self.test_accuracy(model, test_loader)
                     logging.info('step: {} || loss: {:.2f}, test loss: {:.2f}, acc: {:.3f}'.format(step, loss.item(), test_loss.item(), acc))
@@ -110,24 +110,27 @@ class GMVAE_runner():
         model.eval()
         N_sample = 10
         X_list = list()
-        for c in range(self.args.n_classes):
-            w_sample = torch.randn(N_sample, self.args.w_dim).cuda()
-            h_sample, _ = model.P.gen_h(w_sample, c)
-            X, _ = model.P.gen_v(h_sample)
-            X_list.append(X.reshape(N_sample, 1, 28, 28))
-        X_sample = torch.cat(X_list).cpu()
+        w_sample = torch.randn(N_sample, self.args.n_classes, self.args.w_dim).cuda()
+        c_sample = torch.eye(self.args.n_classes).expand(N_sample, -1, -1).cuda()
+        h_sample, _ = model.P.gen_h(w_sample, c_sample) # [N_sample, n_classes, h_dim]
+        X, _ = model.P.gen_v(h_sample)
+        X = X.reshape(N_sample * self.args.n_classes, self.args.v_dim)
+        X_sample = X.reshape(X.shape[0], 1, 28, 28)
         draw_grid(X_sample, os.path.join(self.args.img_dir, 'grid{}.png'.format(step)))
         logging.info('grid{}.png saved!'.format(step))
 
 
     def test_accuracy(self, model, test_loader):
+        model.eval()
         q_c_v = list()
         labels = np.array([])
 
         for i, (val_x, val_y) in enumerate(test_loader):
             val_x = val_x.cuda()
-            pred = model.Q(val_x) # [bs, n_classes]
-            q_c_v.append(pred.detach().cpu().numpy())
+            h, w = model.Q(val_x)
+            h, w = h.expand(1,-1,-1), w.expand(1,-1,-1)
+            pred = model.P.infer_c(w, h) # [1, bs, n_classes]
+            q_c_v.append(pred.squeeze().detach().cpu().numpy())
             labels = np.concatenate([labels, val_y])
         q_c_v = np.concatenate(q_c_v, axis = 0)
         # labels: [len(test_loader), 1]  q_c_v: [len(test_loader), n_classes]
