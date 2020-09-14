@@ -23,7 +23,7 @@ class GMVAE(nn.Module):
 
     def ELBO(self, X):
         h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample = self.Q(X)
-        c_probs = self.Prior.infer_c(h_sample, w_sample)
+        c_probs = self.Prior.infer_c(h_sample, w_sample)  #[M, bs, n_classes]
         # sample: [M, bs, h_dim or w_dim]
         recon_loss = self.recon_loss(h_sample, X)
         kl_loss_c = self.kl_c_loss(c_probs)
@@ -41,12 +41,22 @@ class GMVAE(nn.Module):
         if type is 'gaussian':
             raise NotImplementedError('Gaussian reconstruction loss not implemented!')
         elif type is 'bernoulli':
-            h_sample = h_sample.view(-1, self.h_dim)
-            recon_x = self.P(h_sample) #[M * bs, c, h, w]
-            recon_x = recon_x.view(self.M, -1, self.channels, self.image_size, self.image_size)
-            loss = nn.BCELoss(reduction='none')(input = recon_x, target = X.expand_as(recon_x))
-            loss = torch.sum(loss, dim = [-1,-2,-3])   
-            return torch.mean(loss, axis = 0) #[bs, 1]
+            # h_sample = h_sample.view(-1, self.h_dim)
+            losses = list()
+            for i in range(self.M):
+                h_ = h_sample[i,:]
+                recon_x = self.P(h_)
+                recon_x = recon_x.view(-1, self.channels, self.image_size, self.image_size)
+                loss = nn.BCELoss(reduction='none')(input = recon_x, target = X)
+                losses.append(torch.sum(loss, dim = [1,2,3]))  # [bs]
+            losses = torch.stack(losses, axis = 1)
+            return torch.mean(losses, axis = -1)
+
+            # recon_x = self.P(h_sample) #[M * bs, c, h, w]
+            # recon_x = recon_x.view(self.M, -1, self.channels, self.image_size, self.image_size)
+            # loss = nn.BCELoss(reduction='none')(input = recon_x, target = X.expand_as(recon_x))
+            # loss = torch.sum(loss, dim = [-1,-2,-3])   
+            # return torch.mean(loss, axis = 0) #[bs, 1]
     
     def kl_w_loss(self, w_mean, w_logstd):
         # KL(q(w)||p(w))
@@ -54,30 +64,35 @@ class GMVAE(nn.Module):
         kl = kl.sum(dim=-1)
         return kl
     
+    # def kl_c_loss(self, c_probs):
+    #     # logits [bs, num_classes]
+    #     kl = c_probs * (torch.log(c_probs + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
+    #     kl = torch.sum(kl, axis = -1)
+    #     return kl 
+
     def kl_c_loss(self, c_probs):
-        # logits [bs, num_classes]
+        # [M, bs, n_classes]
         kl = c_probs * (torch.log(c_probs + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
-        kl = torch.sum(kl, axis = -1)
-        return kl 
+        return torch.mean(torch.sum(kl, axis = -1), axis = 0)
 
     def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_probs):
-        # c_logits: [bs, num_classes]
-        # w_sample: [bs, M]
+        # c_probs: [n_classes, M, bs]
+        # w_sample: [M, bs]
         # q_h_v_mean, q_h_v_logstd: [bs, h_dim] 
+
         def kl_loss(q_h_v_mean, q_h_v_logstd, p_h_wc_mean, p_h_wc_logstd):
             kl = (q_h_v_logstd * 2 - p_h_wc_logstd * 2).exp() - 1.0 - q_h_v_logstd * 2 + p_h_wc_logstd * 2
             kl += torch.pow((q_h_v_mean - p_h_wc_mean), 2) / (p_h_wc_logstd * 2).exp()
             kl = kl * 0.5
-            return torch.sum(kl, axis = -1, keepdim = True)  #[bs, 1]
+            return torch.sum(kl, axis = -1, keepdim = True)  # [M, bs, 1]
         kl_losses = list()
         for c in range(self.n_classes):
             h_wc_mean, h_wc_logstd = self.Prior(w_sample, c) # [M, bs, h_dim]
-            loss = kl_loss(q_h_v_mean, q_h_v_logstd, h_wc_mean, h_wc_logstd)
-            loss = torch.mean(loss, axis = 0)
+            loss = kl_loss(q_h_v_mean, q_h_v_logstd, h_wc_mean, h_wc_logstd) # [M, bs, 1]
             kl_losses.append(loss)
-        kl_losses = torch.cat(kl_losses, axis = 1) # [bs, num_classes]
+        kl_losses = torch.cat(kl_losses, axis = -1) # [M, bs, num_classes]
         kl = kl_losses * c_probs
-        return torch.sum(kl, axis = -1) # [bs, 1]
+        return torch.mean(torch.sum(kl, axis = -1), axis = 0) # [bs, 1]
 
     def forward(self, X):
         return self.ELBO(X)

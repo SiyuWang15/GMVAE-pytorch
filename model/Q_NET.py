@@ -39,7 +39,7 @@ class InferenceNet(nn.Module):
     def sample(self, mean, logstd, n_particle = 1):
         # [bs, sample_dim]
         sample = mean + torch.randn_like(mean.expand(n_particle, -1, -1)) * (logstd * 2).exp()
-        return sample
+        return sample  # [M, bs, sample_dim]
     
     def forward(self, inputs):
         inputs = inputs.view(-1, self.in_channel, self.image_size, self.image_size)
