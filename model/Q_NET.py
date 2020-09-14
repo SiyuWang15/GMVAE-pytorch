@@ -48,10 +48,10 @@ class InferenceNet(nn.Module):
         h_v_logvar = self.Qh_v_logvar(hidden_feature)
         w_v_mean = self.Qw_v_mean(hidden_feature)
         w_v_logvar = self.Qw_v_logvar(hidden_feature)
-        c_v = self.Qc(hidden_feature)
+        # c_v = self.Qc(hidden_feature)
         h_sample = self.sample(h_v_mean, h_v_logvar, self.M)
         w_sample = self.sample(w_v_mean, w_v_logvar, self.M)
-        return h_v_mean, h_v_logvar, h_sample, w_v_mean, w_v_logvar, w_sample, c_v
+        return h_v_mean, h_v_logvar, h_sample, w_v_mean, w_v_logvar, w_sample
     
     def predict(self, inputs):
         inputs = inputs.view(-1, self.in_channel, self.image_size, self.image_size)

@@ -54,6 +54,22 @@ class PriorNet(nn.Module):
             )
         self.h_w_mean = nn.ModuleList(h_w_mean)
         self.h_w_logvar = nn.ModuleList(h_w_logvar)
+    
+    def infer_c(self, h_sample, w_sample):
+        # h_sample, w_sample: [M, bs, h_dim or w_dim]
+        def loglikelihood(h, h_mean, h_logstd):
+            logp = - torch.pow(h - h_mean, 2) / ((h_logstd * 2).exp() * 2.0) - np.log(2 * np.pi) / 2.0 - h_logstd
+            return torch.sum(logp, axis = -1) # [M, bs]
+        c_prob = list()
+        feature = self.hidden_layer(w_sample) 
+        for c in range(self.n_classes):
+            mean = self.h_w_mean[c](feature)  # [M, bs, h_dim]
+            logstd = self.h_w_logvar[c](feature)
+            c_prob.append(loglikelihood(h_sample, mean, logstd)) 
+        c_prob = torch.stack(c_prob) # [n_classes, M, bs]
+        c_prob = nn.Softmax(dim = 0)(c_prob)
+        c_prob = torch.mean(c_prob, axis = 1)
+        return c_prob.transpose(0,1)
 
     def forward(self, w, c):
         hidden = self.hidden_layer(w)

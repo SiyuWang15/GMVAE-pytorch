@@ -7,21 +7,23 @@ from model.Q_NET import InferenceNet
 from model.P_NET import GenerationNet, PriorNet
 
 class GMVAE(nn.Module):
-    def __init__(self, channels, image_size, h_dim, w_dim, n_classes, M):
+    def __init__(self, args):
         super(GMVAE, self).__init__()
         # self.v_dim = v_dim
-        self.channels = channels
-        self.image_size = image_size
-        self.w_dim = w_dim
-        self.h_dim = h_dim
-        self.n_classes = n_classes
-        self.M = M
-        self.Q = InferenceNet(channels, image_size, h_dim, w_dim, n_classes, M)
-        self.P = GenerationNet(channels, image_size, h_dim, w_dim, n_classes)
-        self.Prior = PriorNet(n_classes, w_dim, h_dim)
+        self.args = args
+        self.channels = args.channels
+        self.image_size = args.image_size
+        self.w_dim = args.w_dim
+        self.h_dim = args.h_dim
+        self.n_classes = args.n_classes
+        self.M = args.M
+        self.Q = InferenceNet(self.channels, self.image_size, self.h_dim, self.w_dim, self.n_classes,self.M)
+        self.P = GenerationNet(self.channels, self.image_size, self.h_dim, self.w_dim, self.n_classes)
+        self.Prior = PriorNet(self.n_classes, self.w_dim, self.h_dim)
 
     def ELBO(self, X):
-        h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample, c_probs = self.Q(X)
+        h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample = self.Q(X)
+        c_probs = self.Prior.infer_c(h_sample, w_sample)
         # sample: [M, bs, h_dim or w_dim]
         recon_loss = self.recon_loss(h_sample, X)
         kl_loss_c = self.kl_c_loss(c_probs)
@@ -29,8 +31,7 @@ class GMVAE(nn.Module):
         kl_loss_h = self.kl_h_loss(h_mean, h_logstd, w_sample, c_probs)
         # print('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), \
         #     kl_loss_w.mean().item(), kl_loss_c.mean().item()))
-        c_weight = 0.4
-        loss = recon_loss + c_weight * kl_loss_c + kl_loss_h + kl_loss_w
+        loss = recon_loss + self.args.c_weight * kl_loss_c + self.args.h_weight * kl_loss_h + self.args.w_weight * kl_loss_w
         loss = torch.mean(loss)
         return loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h
 
