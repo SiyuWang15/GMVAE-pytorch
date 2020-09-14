@@ -11,8 +11,8 @@ def arg_parser():
     parser.add_argument('--run', type=str, default = 'gmvae', help='The runner to execute')
     parser.add_argument('--dataset', type = str, default='mnist')
     parser.add_argument('--optimizer', type = str, default = 'Adam')
-    parser.add_argument('--w_dim', type = int, default=32)
-    parser.add_argument('--h_dim', type = int, default=32)
+    parser.add_argument('--w_dim', type = int, default=150)
+    parser.add_argument('--h_dim', type = int, default=200)
     parser.add_argument('--n_classes', type = int, default = 16)
     parser.add_argument('--M', type = int, default = 1)
     parser.add_argument('--seed', type=int, default=1234, help='Random seed')
@@ -21,9 +21,9 @@ def arg_parser():
     parser.add_argument('--verbose', type = str, default = 'info')
     parser.add_argument('--gpu_list', type = str, default = '0,1,2,3')
     parser.add_argument('--batch_size', type = int, default=128)
-    parser.add_argument('--n_epochs', type = int, default=10)
+    parser.add_argument('--n_epochs', type = int, default=100)
     parser.add_argument('--test_freq', type = int, default=100)
-    parser.add_argument('--draw_freq', type = int, default = 1000)
+    parser.add_argument('--draw_freq', type = int, default = 100)
     parser.add_argument('--save_freq', type = int, default = 1000)
     parser.add_argument('--lr', type=float, default = 0.001)
     parser.add_argument('--weight_decay', type=float, default=0.00)
@@ -31,6 +31,8 @@ def arg_parser():
     
     if args.dataset == 'mnist':
         args.v_dim = 784
+        args.channels = 1
+        args.image_size = 28
     args.run = os.path.join('./run', args.run)
     args.datapath = './datasets/'
     args.log = os.path.join(args.run, time.strftime('%H-%M-%S', time.localtime()))

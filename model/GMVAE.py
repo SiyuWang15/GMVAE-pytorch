@@ -4,57 +4,59 @@ from torch import nn, optim
 from torch.nn import functional as F
 
 from model.Q_NET import InferenceNet
-from model.P_NET import GenerationNet
+from model.P_NET import GenerationNet, PriorNet
 
 class GMVAE(nn.Module):
-    def __init__(self, v_dim, h_dim, w_dim, n_classes):
+    def __init__(self, channels, image_size, h_dim, w_dim, n_classes):
         super(GMVAE, self).__init__()
-        self.v_dim = v_dim
+        # self.v_dim = v_dim
+        self.channels = channels
+        self.image_size = image_size
         self.w_dim = w_dim
         self.h_dim = h_dim
         self.n_classes = n_classes
-        self.Q = InferenceNet(v_dim, h_dim, w_dim, n_classes)
-        self.P = GenerationNet(v_dim, h_dim, w_dim, n_classes)
+        self.Q = InferenceNet(channels, image_size, h_dim, w_dim, n_classes)
+        self.P = GenerationNet(channels, image_size, h_dim, w_dim, n_classes)
+        self.Prior = PriorNet(n_classes, w_dim, h_dim)
 
     def ELBO(self, X):
-        h_mean, h_logstd, h_sample = self.Q.infer_h(X)
-        w_mean, w_logstd, w_sample = self.Q.infer_w(X)  # logstd = log(sigma) / 2.0
-        logits_c = self.Q.infer_c(w_sample, h_sample)
-        # lam = 0.01
-
+        h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample, c_probs = self.Q(X)
         recon_loss = self.recon_loss(h_sample, X)
-        kl_loss_c = self.kl_c_loss(logits_c)
+        kl_loss_c = self.kl_c_loss(c_probs)
         kl_loss_w = self.kl_w_loss(w_mean, w_logstd)
-        kl_loss_h = self.kl_h_loss(h_mean, h_logstd, w_sample, logits_c)
+        kl_loss_h = self.kl_h_loss(h_mean, h_logstd, w_sample, c_probs)
         # print('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), \
-            # kl_loss_w.mean().item(), kl_loss_c.mean().item()))
-        loss = recon_loss + kl_loss_c + kl_loss_h + kl_loss_w
+        #     kl_loss_w.mean().item(), kl_loss_c.mean().item()))
+        c_weight = 0.4
+        loss = recon_loss + c_weight * kl_loss_c + kl_loss_h + kl_loss_w
         loss = torch.mean(loss)
-        return loss
+        return loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h
 
 
     def recon_loss(self, h_sample, X, type = 'bernoulli'):
+        # negative E_{q(h|v)}[log p(v|h)]
         if type is 'gaussian':
             x_mean, x_logstd = self.P.gen_v(h_sample)
             recon = (X - x_mean) ** 2 / (2. * (2 * x_logstd).exp()) + np.log(2. * np.pi) / 2. + x_logstd
             return recon
         elif type is 'bernoulli':
-            x_logits, _ = self.P.gen_v(h_sample)
-            recon = F.binary_cross_entropy_with_logits(input=x_logits, target=X.reshape(X.shape[0], -1), reduction='none')
-            return torch.sum(recon, axis = -1)
+            recon_x = self.P(h_sample)
+            loss = nn.BCELoss(reduction='none')(input = recon_x, target = X)
+            return torch.sum(loss, dim = [1,2,3])   
     
     def kl_w_loss(self, w_mean, w_logstd):
+        # KL(q(w)||p(w))
         kl = -w_logstd + ((w_logstd * 2).exp() + torch.pow(w_mean, 2) - 1.) / 2.
         kl = kl.sum(dim=-1)
         return kl
     
-    def kl_c_loss(self, c_logits):
+    def kl_c_loss(self, c_probs):
         # logits [bs, num_classes]
-        kl = c_logits * (torch.log(c_logits + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
+        kl = c_probs * (torch.log(c_probs + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
         kl = torch.sum(kl, axis = -1)
         return kl 
 
-    def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_logits):
+    def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_probs):
         # c_logits: [bs, num_classes]
         # w_sample: [bs, M]
         # q_h_v_mean, q_h_v_logstd: [bs, h_dim] 
@@ -65,11 +67,11 @@ class GMVAE(nn.Module):
             return torch.sum(kl, axis = -1, keepdim = True)  #[bs, 1]
         kl_losses = list()
         for c in range(self.n_classes):
-            h_wc_mean, h_wc_logstd = self.P.gen_h(w_sample, c)
+            h_wc_mean, h_wc_logstd = self.Prior(w_sample, c)
             loss = kl_loss(q_h_v_mean, q_h_v_logstd, h_wc_mean, h_wc_logstd)
             kl_losses.append(loss)
         kl_losses = torch.cat(kl_losses, axis = 1) # [bs, num_classes]
-        kl = kl_losses * c_logits
+        kl = kl_losses * c_probs
         return torch.sum(kl, axis = -1) # [bs, 1]
 
     def forward(self, X):

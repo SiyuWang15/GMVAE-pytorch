@@ -34,8 +34,9 @@ class GMVAE_runner():
             raise NotImplementedError('Optimizer {} not understood.'.format(self.args.optimizer))
     
     def train(self):
-        model = GMVAE(v_dim = self.args.v_dim, h_dim = self.args.h_dim, w_dim = self.args.w_dim, \
-            n_classes = self.args.n_classes)
+        # model = GMVAE(v_dim = self.args.v_dim, h_dim = self.args.h_dim, w_dim = self.args.w_dim, \
+            # n_classes = self.args.n_classes)
+        model = GMVAE(channels = self.args.channels, image_size = self.args.image_size, h_dim = self.args.h_dim, w_dim = self.args.w_dim, n_classes = self.args.n_classes)
         if self.args.gpu_list is not None:
             if len(self.args.gpu_list.split(',')) > 1:
                 model = torch.nn.DataParallel(model).cuda()
@@ -61,7 +62,7 @@ class GMVAE_runner():
         
         train_loader = DataLoader(trainset, batch_size = self.args.batch_size, shuffle = True, num_workers = 4)
         test_loader = DataLoader(testset, batch_size = self.args.batch_size, shuffle = True, num_workers = 4)
-        test_iter = iter(test_loader)
+        test_iter = itertools.cycle(test_loader)
 
 
         # self.args.log = self.args.run + time_string 
@@ -74,11 +75,17 @@ class GMVAE_runner():
         val_losses = []
 
         for epoch in range(self.args.n_epochs):
+            if (epoch + 1) % 5 == 0:
+                self.args.lr *= 0.5
+                for param_group in optimizer.param_groups:
+                    param_group['lr'] = self.args.lr
+                logging.info('learning rate updated: {}'.format(self.args.lr))
             for _,  (X, y) in  enumerate(train_loader):
-                step += 1
+                # step += 1
                 model.train()
                 X = X.cuda()
-                loss = model.ELBO(X)
+                X = X.view(-1, self.args.channels, self.args.image_size, self.args.image_size)
+                loss, *_ = model.ELBO(X)
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
@@ -87,8 +94,9 @@ class GMVAE_runner():
                     test_X, _ = next(test_iter)
                     test_X = test_X.cuda()
                     model.eval()
-                    test_loss = model.ELBO(test_X)
-
+                    test_loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h = model.ELBO(test_X)
+                    logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_w:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.mean().item(), \
+                        kl_loss_c.mean().item(), kl_loss_w.mean().item(), kl_loss_h.mean().item()))
                     acc = self.test_accuracy(model, test_loader)
                     logging.info('step: {} || loss: {:.2f}, test loss: {:.2f}, acc: {:.3f}'.format(step, loss.item(), test_loss.item(), acc))
 
@@ -100,11 +108,18 @@ class GMVAE_runner():
                 if step % self.args.draw_freq == 0:
                     self.test_cluster(model, step)
                 
-                if step % self.args.save_freq == 0:
-                    ckpt_path = os.path.join(self.args.ckpt_dir, 'checkpoint{}k.pth'.format(step // 1000))
-                    torch.save(model.state_dict(), ckpt_path)
-                    logging.info('checkpoint{}k.pth saved!'.format(step // 1000))
-                    
+                step += 1
+                
+                # if step % self.args.save_freq == 0:
+                #     ckpt_path = os.path.join(self.args.ckpt_dir, 'checkpoint{}k.pth'.format(step // 1000))
+                #     torch.save(model.state_dict(), ckpt_path)
+                #     logging.info('checkpoint{}k.pth saved!'.format(step // 1000))
+                # step += 1
+            
+            ckpt_path = os.path.join(self.args.ckpt_dir, 'checkpoint{}.pth'.format(epoch))
+            torch.save(model.state_dict(), ckpt_path)
+            logging.info('{} saved'.format(ckpt_path))
+
 
     def test_cluster(self, model, step):
         model.eval()
@@ -112,9 +127,9 @@ class GMVAE_runner():
         X_list = list()
         for c in range(self.args.n_classes):
             w_sample = torch.randn(N_sample, self.args.w_dim).cuda()
-            h_sample, _ = model.P.gen_h(w_sample, c)
-            X, _ = model.P.gen_v(h_sample)
-            X_list.append(X.reshape(N_sample, 1, 28, 28))
+            h_sample, _ = model.Prior(w_sample, c)
+            X = model.P(h_sample)
+            X_list.append(X)
         X_sample = torch.cat(X_list).cpu()
         draw_grid(X_sample, os.path.join(self.args.img_dir, 'grid{}.png'.format(step)))
         logging.info('grid{}.png saved!'.format(step))
@@ -123,10 +138,10 @@ class GMVAE_runner():
     def test_accuracy(self, model, test_loader):
         q_c_v = list()
         labels = np.array([])
-
+        model.eval()
         for i, (val_x, val_y) in enumerate(test_loader):
             val_x = val_x.cuda()
-            pred = model.Q(val_x) # [bs, n_classes]
+            pred = model.Q.predict(val_x) # [bs, n_classes]
             q_c_v.append(pred.detach().cpu().numpy())
             labels = np.concatenate([labels, val_y])
         q_c_v = np.concatenate(q_c_v, axis = 0)
@@ -138,4 +153,9 @@ class GMVAE_runner():
         for i, p in enumerate(pred_cluster):
             pred_class[i] = cluster_to_label[p]
         acc = np.sum(pred_class == labels) / len(labels)
+        # wrong = list()
+        # for i, l in enumerate(pred_class):
+        #     if pred_class[i] != labels[i]:
+        #         wrong.append((pred_class[i], labels[i]))
+        # logging.info(wrong)
         return acc
