@@ -19,8 +19,7 @@ class GenerationNet(nn.Module):
         self.v_h = fullconvNet(h_dim, 512, channels, image_size)
 
     def forward(self, h):
-        h = h.view(h.shape[0], -1)
-        assert h.shape[1] == self.h_dim
+        assert h.shape[-1] == self.h_dim
         v = self.v_h(h)
         return v
         

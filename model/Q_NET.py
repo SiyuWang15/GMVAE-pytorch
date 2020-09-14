@@ -10,10 +10,11 @@ from layers.base import MLP, convNet, fullconvNet
 # Inference Network
 class InferenceNet(nn.Module):
     # def __init__(self, v_dim, h_dim, w_dim, n_classes):
-    def __init__(self, in_channel, image_size, h_dim, w_dim, n_classes):
+    def __init__(self, in_channel, image_size, h_dim, w_dim, n_classes, M):
         super(InferenceNet, self).__init__()
 
         self.h_dim = h_dim
+        self.M = M
         # self.v_dim = v_dim
         self.in_channel = in_channel
         self.image_size = image_size
@@ -36,8 +37,8 @@ class InferenceNet(nn.Module):
         )
     
     def sample(self, mean, logstd, n_particle = 1):
-        assert n_particle == 1
-        sample = mean + torch.randn_like(mean) * (logstd * 2).exp()
+        # [bs, sample_dim]
+        sample = mean + torch.randn_like(mean.expand(n_particle, -1, -1)) * (logstd * 2).exp()
         return sample
     
     def forward(self, inputs):
@@ -48,16 +49,11 @@ class InferenceNet(nn.Module):
         w_v_mean = self.Qw_v_mean(hidden_feature)
         w_v_logvar = self.Qw_v_logvar(hidden_feature)
         c_v = self.Qc(hidden_feature)
-        h_sample = self.sample(h_v_mean, h_v_logvar)
-        w_sample = self.sample(w_v_mean, w_v_logvar)
+        h_sample = self.sample(h_v_mean, h_v_logvar, self.M)
+        w_sample = self.sample(w_v_mean, w_v_logvar, self.M)
         return h_v_mean, h_v_logvar, h_sample, w_v_mean, w_v_logvar, w_sample, c_v
     
     def predict(self, inputs):
         inputs = inputs.view(-1, self.in_channel, self.image_size, self.image_size)
         hidden_feature = self.hidden_layer(inputs)
         return self.Qc(hidden_feature)
-    
-    # def forward(self, X):
-    #     h, *_ = self.infer_h(X)
-    #     w, *_ = self.infer_w(X)
-    #     return self.infer_c(w, h)

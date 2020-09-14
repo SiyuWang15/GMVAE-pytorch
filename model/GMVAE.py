@@ -7,7 +7,7 @@ from model.Q_NET import InferenceNet
 from model.P_NET import GenerationNet, PriorNet
 
 class GMVAE(nn.Module):
-    def __init__(self, channels, image_size, h_dim, w_dim, n_classes):
+    def __init__(self, channels, image_size, h_dim, w_dim, n_classes, M):
         super(GMVAE, self).__init__()
         # self.v_dim = v_dim
         self.channels = channels
@@ -15,12 +15,14 @@ class GMVAE(nn.Module):
         self.w_dim = w_dim
         self.h_dim = h_dim
         self.n_classes = n_classes
-        self.Q = InferenceNet(channels, image_size, h_dim, w_dim, n_classes)
+        self.M = M
+        self.Q = InferenceNet(channels, image_size, h_dim, w_dim, n_classes, M)
         self.P = GenerationNet(channels, image_size, h_dim, w_dim, n_classes)
         self.Prior = PriorNet(n_classes, w_dim, h_dim)
 
     def ELBO(self, X):
         h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample, c_probs = self.Q(X)
+        # sample: [M, bs, h_dim or w_dim]
         recon_loss = self.recon_loss(h_sample, X)
         kl_loss_c = self.kl_c_loss(c_probs)
         kl_loss_w = self.kl_w_loss(w_mean, w_logstd)
@@ -36,13 +38,14 @@ class GMVAE(nn.Module):
     def recon_loss(self, h_sample, X, type = 'bernoulli'):
         # negative E_{q(h|v)}[log p(v|h)]
         if type is 'gaussian':
-            x_mean, x_logstd = self.P.gen_v(h_sample)
-            recon = (X - x_mean) ** 2 / (2. * (2 * x_logstd).exp()) + np.log(2. * np.pi) / 2. + x_logstd
-            return recon
+            raise NotImplementedError('Gaussian reconstruction loss not implemented!')
         elif type is 'bernoulli':
-            recon_x = self.P(h_sample)
-            loss = nn.BCELoss(reduction='none')(input = recon_x, target = X)
-            return torch.sum(loss, dim = [1,2,3])   
+            h_sample = h_sample.view(-1, self.h_dim)
+            recon_x = self.P(h_sample) #[M * bs, c, h, w]
+            recon_x = recon_x.view(self.M, -1, self.channels, self.image_size, self.image_size)
+            loss = nn.BCELoss(reduction='none')(input = recon_x, target = X.expand_as(recon_x))
+            loss = torch.sum(loss, dim = [-1,-2,-3])   
+            return torch.mean(loss, axis = 0) #[bs, 1]
     
     def kl_w_loss(self, w_mean, w_logstd):
         # KL(q(w)||p(w))
@@ -67,8 +70,9 @@ class GMVAE(nn.Module):
             return torch.sum(kl, axis = -1, keepdim = True)  #[bs, 1]
         kl_losses = list()
         for c in range(self.n_classes):
-            h_wc_mean, h_wc_logstd = self.Prior(w_sample, c)
+            h_wc_mean, h_wc_logstd = self.Prior(w_sample, c) # [M, bs, h_dim]
             loss = kl_loss(q_h_v_mean, q_h_v_logstd, h_wc_mean, h_wc_logstd)
+            loss = torch.mean(loss, axis = 0)
             kl_losses.append(loss)
         kl_losses = torch.cat(kl_losses, axis = 1) # [bs, num_classes]
         kl = kl_losses * c_probs

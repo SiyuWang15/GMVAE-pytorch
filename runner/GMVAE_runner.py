@@ -36,7 +36,8 @@ class GMVAE_runner():
     def train(self):
         # model = GMVAE(v_dim = self.args.v_dim, h_dim = self.args.h_dim, w_dim = self.args.w_dim, \
             # n_classes = self.args.n_classes)
-        model = GMVAE(channels = self.args.channels, image_size = self.args.image_size, h_dim = self.args.h_dim, w_dim = self.args.w_dim, n_classes = self.args.n_classes)
+        model = GMVAE(channels = self.args.channels, image_size = self.args.image_size, h_dim = self.args.h_dim, w_dim = self.args.w_dim, \
+             n_classes = self.args.n_classes, M = self.args.M)
         if self.args.gpu_list is not None:
             if len(self.args.gpu_list.split(',')) > 1:
                 model = torch.nn.DataParallel(model).cuda()
