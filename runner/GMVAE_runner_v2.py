@@ -36,7 +36,7 @@ class GMVAE_runner():
     def train(self):
         # model = GMVAE(v_dim = self.args.v_dim, h_dim = self.args.h_dim, w_dim = self.args.w_dim, \
             # n_classes = self.args.n_classes)
-        model = GMVAE(channels = self.args.channels, image_size = self.args.image_size, h_dim = self.args.h_dim, w_dim = self.args.w_dim, n_classes = self.args.n_classes)
+        model = GMVAE(self.args)
         if self.args.gpu_list is not None:
             if len(self.args.gpu_list.split(',')) > 1:
                 model = torch.nn.DataParallel(model).cuda()
@@ -94,9 +94,9 @@ class GMVAE_runner():
                     test_X, _ = next(test_iter)
                     test_X = test_X.cuda()
                     model.eval()
-                    test_loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h = model.ELBO(test_X)
-                    logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_w:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.mean().item(), \
-                        kl_loss_c.mean().item(), kl_loss_w.mean().item(), kl_loss_h.mean().item()))
+                    test_loss, recon_loss, kl_loss_c, kl_loss_h = model.ELBO(test_X)
+                    logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.mean().item(), \
+                        kl_loss_c.mean().item(), kl_loss_h.mean().item()))
                     acc = self.test_accuracy(model, test_loader)
                     logging.info('step: {} || loss: {:.2f}, test loss: {:.2f}, acc: {:.3f}'.format(step, loss.item(), test_loss.item(), acc))
 
@@ -125,12 +125,9 @@ class GMVAE_runner():
         model.eval()
         N_sample = 10
         X_list = list()
-        for c in range(self.args.n_classes):
-            w_sample = torch.randn(N_sample, self.args.w_dim).cuda()
-            h_sample, _ = model.Prior(w_sample, c)
-            X = model.P(h_sample)
-            X_list.append(X)
-        X_sample = torch.cat(X_list).cpu()
+        h_sample = torch.randn(N_sample, self.args.h_dim).cuda()
+        X = model.P(h_sample)  #[n_classes, N_sample, channel, imsize, imsize]
+        X_sample = X.reshape(-1, self.args.channels, self.args.image_size, self.args.image_size)
         draw_grid(X_sample, os.path.join(self.args.img_dir, 'grid{}.png'.format(step)))
         logging.info('grid{}.png saved!'.format(step))
 
