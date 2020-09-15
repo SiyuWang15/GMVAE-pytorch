@@ -14,7 +14,7 @@ def arg_parser():
     parser.add_argument('--w_dim', type = int, default=150)
     parser.add_argument('--h_dim', type = int, default=200)
     parser.add_argument('--n_classes', type = int, default = 14)
-    parser.add_argument('--M', type = int, default = 1)
+    parser.add_argument('--M', type = int, default = 10)
     parser.add_argument('--h_weight', type = float, default = 1.0)
     parser.add_argument('--w_weight', type = float, default = 1.0)
     parser.add_argument('--c_weight', type = float, default = 1.0)

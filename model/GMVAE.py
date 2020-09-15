@@ -22,8 +22,8 @@ class GMVAE(nn.Module):
         self.Prior = PriorNet(self.n_classes, self.w_dim, self.h_dim)
 
     def ELBO(self, X):
-        h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample = self.Q(X)
-        c_probs = self.Prior.infer_c(h_sample, w_sample)  #[M, bs, n_classes]
+        h_mean, h_logstd, h_sample, w_mean, w_logstd, w_sample, c_probs = self.Q(X)
+        # c_probs = self.Prior.infer_c(h_sample, w_sample)  #[M, bs, n_classes]
         # sample: [M, bs, h_dim or w_dim]
         recon_loss = self.recon_loss(h_sample, X)
         kl_loss_c = self.kl_c_loss(c_probs)
@@ -74,8 +74,6 @@ class GMVAE(nn.Module):
         # [M, bs, n_classes]
         kl = c_probs * (torch.log(c_probs + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
         kl = torch.sum(kl, axis = -1).mean()
-        if kl < self.args.lam:
-            return torch.Tensor([self.args.lam]).cuda()
         return kl
 
     def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_probs):
