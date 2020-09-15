@@ -61,12 +61,13 @@ class PriorNet(nn.Module):
             logp = - torch.pow(h - h_mean, 2) / ((h_logstd * 2).exp() * 2.0) - np.log(2 * np.pi) / 2.0 - h_logstd
             return torch.sum(logp, axis = -1, keepdim = True) # [M, bs, 1]
         c_prob = list()
+        M, bs, _ = h_sample.shape
         feature = self.hidden_layer(w_sample) 
         for c in range(self.n_classes):
             mean = self.h_w_mean[c](feature)  # [M, bs, h_dim]
             logstd = self.h_w_logvar[c](feature)
             c_prob.append(loglikelihood(h_sample, mean, logstd))
-        c_prob = torch.cat(c_prob, axis = 1) # [M, bs, n_classes]
+        c_prob = torch.cat(c_prob, axis = -1) # [M, bs, n_classes]
         c_prob = nn.Softmax(dim = -1)(c_prob)
         return c_prob
 

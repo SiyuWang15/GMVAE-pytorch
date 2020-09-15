@@ -95,8 +95,8 @@ class GMVAE_runner():
                     test_X = test_X.cuda()
                     model.eval()
                     test_loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h = model.ELBO(test_X)
-                    logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_w:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.mean().item(), \
-                        kl_loss_c.mean().item(), kl_loss_w.mean().item(), kl_loss_h.mean().item()))
+                    logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_w:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.item(), \
+                        kl_loss_c.item(), kl_loss_w.item(), kl_loss_h.item()))
                     acc = self.test_accuracy(model, test_loader)
                     logging.info('step: {} || loss: {:.2f}, test loss: {:.2f}, acc: {:.3f}'.format(step, loss.item(), test_loss.item(), acc))
 

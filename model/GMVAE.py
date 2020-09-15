@@ -31,8 +31,8 @@ class GMVAE(nn.Module):
         kl_loss_h = self.kl_h_loss(h_mean, h_logstd, w_sample, c_probs)
         # print('recon loss:{}, loss_c:{}, loss_w:{}, loss_h:{}'.format(recon_loss.mean().item(), kl_loss_c.mean().item(), \
         #     kl_loss_w.mean().item(), kl_loss_c.mean().item()))
-        loss = recon_loss + self.args.c_weight * kl_loss_c + self.args.h_weight * kl_loss_h + self.args.w_weight * kl_loss_w
-        loss = torch.mean(loss)
+        # loss = recon_loss + self.args.c_weight * kl_loss_c + self.args.h_weight * kl_loss_h + self.args.w_weight * kl_loss_w
+        loss = recon_loss + kl_loss_h + kl_loss_w + kl_loss_c
         return loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h
 
 
@@ -50,7 +50,7 @@ class GMVAE(nn.Module):
                 loss = nn.BCELoss(reduction='none')(input = recon_x, target = X)
                 losses.append(torch.sum(loss, dim = [1,2,3]))  # [bs]
             losses = torch.stack(losses, axis = 1)
-            return torch.mean(losses, axis = -1)
+            return torch.mean(losses)
 
             # recon_x = self.P(h_sample) #[M * bs, c, h, w]
             # recon_x = recon_x.view(self.M, -1, self.channels, self.image_size, self.image_size)
@@ -59,10 +59,10 @@ class GMVAE(nn.Module):
             # return torch.mean(loss, axis = 0) #[bs, 1]
     
     def kl_w_loss(self, w_mean, w_logstd):
-        # KL(q(w)||p(w))
+        # KL(q(w|v)||p(w))
         kl = -w_logstd + ((w_logstd * 2).exp() + torch.pow(w_mean, 2) - 1.) / 2.
         kl = kl.sum(dim=-1)
-        return kl
+        return torch.mean(kl)
     
     # def kl_c_loss(self, c_probs):
     #     # logits [bs, num_classes]
@@ -73,7 +73,10 @@ class GMVAE(nn.Module):
     def kl_c_loss(self, c_probs):
         # [M, bs, n_classes]
         kl = c_probs * (torch.log(c_probs + 1e-10) + np.log(self.n_classes, dtype = 'float32'))
-        return torch.mean(torch.sum(kl, axis = -1), axis = 0)
+        kl = torch.sum(kl, axis = -1).mean()
+        if kl < self.args.lam:
+            return torch.Tensor([self.args.lam]).cuda()
+        return kl
 
     def kl_h_loss(self, q_h_v_mean, q_h_v_logstd, w_sample, c_probs):
         # c_probs: [n_classes, M, bs]
@@ -92,7 +95,7 @@ class GMVAE(nn.Module):
             kl_losses.append(loss)
         kl_losses = torch.cat(kl_losses, axis = -1) # [M, bs, num_classes]
         kl = kl_losses * c_probs
-        return torch.mean(torch.sum(kl, axis = -1), axis = 0) # [bs, 1]
+        return torch.mean(torch.sum(kl, axis = -1)) # [bs, 1]
 
     def forward(self, X):
         return self.ELBO(X)
