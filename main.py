@@ -11,12 +11,13 @@ def arg_parser():
     parser.add_argument('--run', type=str, default = 'gmvae', help='The runner to execute')
     parser.add_argument('--dataset', type = str, default='mnist')
     parser.add_argument('--optimizer', type = str, default = 'Adam')
-    parser.add_argument('--w_dim', type = int, default=150)
-    parser.add_argument('--h_dim', type = int, default=200)
+    parser.add_argument('--w_dim', type = int, default=32)
+    parser.add_argument('--h_dim', type = int, default=32)
     parser.add_argument('--n_classes', type = int, default = 16)
-    parser.add_argument('--M', type = int, default = 1)
+    parser.add_argument('--M', type = int, default = 10)
     parser.add_argument('--seed', type=int, default=1234, help='Random seed')
     parser.add_argument('--test', action='store_true', help='Whether to test the model')
+    parser.add_argument('--test_ckpt', type = str, default = None)
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
     parser.add_argument('--verbose', type = str, default = 'info')
     parser.add_argument('--gpu_list', type = str, default = '0,1,2,3')
@@ -43,27 +44,31 @@ def arg_parser():
 
 def main():
     args = arg_parser()
-    os.makedirs(args.img_dir)
 
     level = getattr(logging, args.verbose.upper(), None)
     if not isinstance(level, int):
         raise ValueError('level {} not supported'.format(args.verbose))
 
-    handler1 = logging.StreamHandler()
-    handler2 = logging.FileHandler(os.path.join(args.log, 'training.log'))
-    formatter = logging.Formatter('%(levelname)s - %(filename)s - %(asctime)s - %(message)s')
-    handler1.setFormatter(formatter)
-    handler2.setFormatter(formatter)
-    logger = logging.getLogger()
-    logger.addHandler(handler1)
-    logger.addHandler(handler2)
-    logger.setLevel(level)
-    logging.info('Using GPU {}'.format(args.gpu_list))
-    logging.info('Loging in {}'.format(args.log))
-    logging.info(args)
-
     runner = GMVAE_runner(args)
-    runner.train()
+    if args.test:
+        args.test_ckpt = 'run/gmvae/15-29-24/checkpoint99.pth'
+        assert args.test_ckpt is not None
+        runner.test()
+    else:
+        os.makedirs(args.img_dir)
+        handler1 = logging.StreamHandler()
+        handler2 = logging.FileHandler(os.path.join(args.log, 'training.log'))
+        formatter = logging.Formatter('%(levelname)s - %(filename)s - %(asctime)s - %(message)s')
+        handler1.setFormatter(formatter)
+        handler2.setFormatter(formatter)
+        logger = logging.getLogger()
+        logger.addHandler(handler1)
+        logger.addHandler(handler2)
+        logger.setLevel(level)
+        logging.info('Using GPU {}'.format(args.gpu_list))
+        logging.info('Loging in {}'.format(args.log))
+        logging.info(args)
+        runner.train()
 
     
 
