@@ -21,7 +21,7 @@ def arg_parser():
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
     parser.add_argument('--verbose', type = str, default = 'info')
     parser.add_argument('--gpu_list', type = str, default = '0,1,2,3')
-    parser.add_argument('--batch_size', type = int, default=128)
+    parser.add_argument('--batch_size', type = int, default=32)
     parser.add_argument('--n_epochs', type = int, default=100)
     parser.add_argument('--test_freq', type = int, default=100)
     parser.add_argument('--draw_freq', type = int, default = 100)

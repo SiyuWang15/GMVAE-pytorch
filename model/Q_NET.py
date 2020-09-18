@@ -10,14 +10,14 @@ from layers.base import MLP, convNet, fullconvNet
 # Inference Network
 class InferenceNet(nn.Module):
     # def __init__(self, v_dim, h_dim, w_dim, n_classes):
-    def __init__(self, in_channel, image_size, h_dim, w_dim, n_classes):
+    def __init__(self, in_channel, image_size, h_dim, n_classes, M):
         super(InferenceNet, self).__init__()
 
         self.h_dim = h_dim
+        self.M = M
         # self.v_dim = v_dim
         self.in_channel = in_channel
         self.image_size = image_size
-        self.w_dim = w_dim
         self.n_classes = n_classes
         
         hidden_size = 512
@@ -27,35 +27,38 @@ class InferenceNet(nn.Module):
         self.Qh_v_mean = nn.Linear(hidden_size, h_dim)
         self.Qh_v_logvar = nn.Linear(hidden_size, h_dim)
         # Q(w|v)
-        self.Qw_v_mean = nn.Linear(hidden_size, w_dim)
-        self.Qw_v_logvar = nn.Linear(hidden_size, w_dim)
 
         self.Qc = nn.Sequential(
-            nn.Linear(hidden_size, n_classes),
+            nn.Linear(hidden_size + h_dim, n_classes),
             nn.Softmax(dim = -1)
         )
     
-    def sample(self, mean, logstd, n_particle = 1):
-        assert n_particle == 1
-        sample = mean + torch.randn_like(mean) * (logstd).exp()
-        return sample
+    def sample(self, mean, logstd):
+        sample = mean + torch.randn_like(mean.unsqueeze(0).expand(self.M, *mean.shape)) * (logstd).exp() # [M * bs, sample_dim]
+        return sample.reshape(-1, mean.shape[1])
+    
+    def infer_c(self, v_feature, h_sample):
+        # v_feature: [bs, hidden_size]  h_sample: [M * bs, h_dim]
+        v_feature = v_feature.repeat(self.M, 1)
+        concat = torch.cat([v_feature, h_sample], axis = -1)
+        return self.Qc(concat) # [M * bs, n_classes]
+
     
     def forward(self, inputs):
         inputs = inputs.view(-1, self.in_channel, self.image_size, self.image_size)
         hidden_feature = self.hidden_layer(inputs)
         h_v_mean = self.Qh_v_mean(hidden_feature)
         h_v_logvar = self.Qh_v_logvar(hidden_feature)
-        w_v_mean = self.Qw_v_mean(hidden_feature)
-        w_v_logvar = self.Qw_v_logvar(hidden_feature)
-        c_v = self.Qc(hidden_feature)
         h_sample = self.sample(h_v_mean, h_v_logvar)
-        w_sample = self.sample(w_v_mean, w_v_logvar)
-        return h_v_mean, h_v_logvar, h_sample, w_v_mean, w_v_logvar, w_sample, c_v
+        c_vh = self.infer_c(hidden_feature, h_sample)
+        return h_v_mean, h_v_logvar, h_sample, c_vh
     
     def predict(self, inputs):
         inputs = inputs.view(-1, self.in_channel, self.image_size, self.image_size)
         hidden_feature = self.hidden_layer(inputs)
-        return self.Qc(hidden_feature)
+        h_sample = self.Qh_v_mean(hidden_feature) # [M, h_dim]
+        pred = self.Qc(torch.cat([hidden_feature, h_sample], axis = -1))
+        return pred
     
     # def forward(self, X):
     #     h, *_ = self.infer_h(X)
