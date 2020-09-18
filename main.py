@@ -2,6 +2,7 @@ import logging
 import argparse
 import os
 import time
+import torch
 from runner.GMVAE_runner import GMVAE_runner
 
 
@@ -11,9 +12,9 @@ def arg_parser():
     parser.add_argument('--run', type=str, default = 'gmvae', help='The runner to execute')
     parser.add_argument('--dataset', type = str, default='mnist')
     parser.add_argument('--optimizer', type = str, default = 'Adam')
-    parser.add_argument('--w_dim', type = int, default=150)
-    parser.add_argument('--h_dim', type = int, default=200)
-    parser.add_argument('--n_classes', type = int, default = 14)
+    parser.add_argument('--w_dim', type = int, default=32)
+    parser.add_argument('--h_dim', type = int, default=32)
+    parser.add_argument('--n_classes', type = int, default = 20)
     parser.add_argument('--M', type = int, default = 10)
     parser.add_argument('--h_weight', type = float, default = 1.0)
     parser.add_argument('--w_weight', type = float, default = 1.0)
@@ -23,8 +24,8 @@ def arg_parser():
     parser.add_argument('--test', action='store_true', help='Whether to test the model')
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
     parser.add_argument('--verbose', type = str, default = 'info')
-    parser.add_argument('--gpu_list', type = str, default = '0,1,2,3')
-    parser.add_argument('--batch_size', type = int, default=128)
+    parser.add_argument('--gpu_list', type = str, default = '1,2,3,4')
+    parser.add_argument('--batch_size', type = int, default=256)
     parser.add_argument('--n_epochs', type = int, default=100)
     parser.add_argument('--test_freq', type = int, default=100)
     parser.add_argument('--draw_freq', type = int, default = 100)
@@ -48,6 +49,11 @@ def arg_parser():
 def main():
     args = arg_parser()
     os.makedirs(args.img_dir)
+
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    args.device = device
+    logging.info('Using device: {}'.format(device))
+
 
     level = getattr(logging, args.verbose.upper(), None)
     if not isinstance(level, int):

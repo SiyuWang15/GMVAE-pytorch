@@ -42,6 +42,7 @@ class GMVAE_runner():
                 model = torch.nn.DataParallel(model).cuda()
             else:
                 model = model.cuda()
+        model = model.to(self.args.device)
         if isinstance(model, torch.nn.DataParallel):
             model = model.module
         optimizer = self.get_optimizer(model.parameters())
@@ -83,7 +84,8 @@ class GMVAE_runner():
             for _,  (X, y) in  enumerate(train_loader):
                 # step += 1
                 model.train()
-                X = X.cuda()
+                # X = X.cuda()
+                X = X.to(self.args.device)
                 X = X.view(-1, self.args.channels, self.args.image_size, self.args.image_size)
                 loss, *_ = model.ELBO(X)
                 optimizer.zero_grad()
@@ -92,7 +94,8 @@ class GMVAE_runner():
 
                 if step % self.args.test_freq == 0:
                     test_X, _ = next(test_iter)
-                    test_X = test_X.cuda()
+                    # test_X = test_X.cuda()
+                    test_X = test_X.to(self.args.device)
                     model.eval()
                     test_loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h = model.ELBO(test_X)
                     logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_w:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.item(), \
