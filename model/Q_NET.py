@@ -10,9 +10,10 @@ from layers.base import MLP, convNet, fullconvNet
 # Inference Network
 class InferenceNet(nn.Module):
     # def __init__(self, v_dim, h_dim, w_dim, n_classes):
-    def __init__(self, in_channel, image_size, h_dim, w_dim, n_classes):
+    def __init__(self, in_channel, image_size, h_dim, w_dim, n_classes, n_particles,  M):
         super(InferenceNet, self).__init__()
-
+        self.n_particles = n_particles
+        self.M = M
         self.h_dim = h_dim
         # self.v_dim = v_dim
         self.in_channel = in_channel
@@ -26,18 +27,20 @@ class InferenceNet(nn.Module):
         # Q(h|v)
         self.Qh_v_mean = nn.Linear(hidden_size, h_dim)
         self.Qh_v_logvar = nn.Linear(hidden_size, h_dim)
-        # Q(w|v)
-        self.Qw_v_mean = nn.Linear(hidden_size, w_dim)
-        self.Qw_v_logvar = nn.Linear(hidden_size, w_dim)
+        # Q(w|h)
+        self.Qw_h_mean = nn.Linear(h_dim, w_dim)
+        self.Qw_h_logvar = nn.Linear(h_dim, w_dim)
 
         self.Qc = nn.Sequential(
-            nn.Linear(hidden_size, n_classes),
+            nn.Linear(h_dim + w_dim, n_classes),
             nn.Softmax(dim = -1)
         )
     
-    def sample(self, mean, logstd, n_particle = 1):
-        assert n_particle == 1
-        sample = mean + torch.randn_like(mean) * (logstd).exp()
+    
+    def sample(self, mean, logstd, n_sample):
+        # [bs, sample_dim]
+        sample = mean + torch.randn_like(mean.expand(n_sample, -1, -1)) * logstd.exp() # [n_particles or M, bs, samples_dim]
+        sample = sample.view(-1, mean.shape[-1]) # [-1, sample_dim]
         return sample
     
     def forward(self, inputs):
@@ -45,17 +48,22 @@ class InferenceNet(nn.Module):
         hidden_feature = self.hidden_layer(inputs)
         h_v_mean = self.Qh_v_mean(hidden_feature)
         h_v_logvar = self.Qh_v_logvar(hidden_feature)
-        w_v_mean = self.Qw_v_mean(hidden_feature)
-        w_v_logvar = self.Qw_v_logvar(hidden_feature)
-        c_v = self.Qc(hidden_feature)
-        h_sample = self.sample(h_v_mean, h_v_logvar)
-        w_sample = self.sample(w_v_mean, w_v_logvar)
-        return h_v_mean, h_v_logvar, h_sample, w_v_mean, w_v_logvar, w_sample, c_v
+        h_sample = self.sample(h_v_mean, h_v_logvar, self.n_particles)
+        w_h_mean = self.Qw_h_mean(h_sample)
+        w_h_logvar = self.Qw_h_logvar(h_sample)
+        w_sample = self.sample(w_h_mean, w_h_logvar, self.M) #  [M * n_particles * bs, h_sample]
+        dup_h = h_sample.unsqueeze(0).expand(self.M, -1, -1).contiguous().view(-1, h_sample.shape[-1]) # [M * n_particles * bs, h_sample]
+        concat = torch.cat([w_sample, dup_h], axis = -1)
+        c_v = self.Qc(concat)
+        return h_v_mean, h_v_logvar, h_sample, w_h_mean, w_h_logvar, w_sample, c_v
     
     def predict(self, inputs):
         inputs = inputs.view(-1, self.in_channel, self.image_size, self.image_size)
         hidden_feature = self.hidden_layer(inputs)
-        return self.Qc(hidden_feature)
+        h = self.Qh_v_mean(hidden_feature)
+        w = self.Qw_h_mean(h)
+        concat = torch.cat([w,h], axis = -1)
+        return self.Qc(concat)
     
     # def forward(self, X):
     #     h, *_ = self.infer_h(X)

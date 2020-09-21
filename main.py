@@ -2,6 +2,7 @@ import logging
 import argparse
 import os
 import time
+import torch
 from runner.GMVAE_runner import GMVAE_runner
 
 
@@ -15,13 +16,14 @@ def arg_parser():
     parser.add_argument('--h_dim', type = int, default=32)
     parser.add_argument('--n_classes', type = int, default = 16)
     parser.add_argument('--M', type = int, default = 10)
+    parser.add_argument('--n_particles', type = int, default = 1)
     parser.add_argument('--seed', type=int, default=1234, help='Random seed')
     parser.add_argument('--test', action='store_true', help='Whether to test the model')
     parser.add_argument('--test_ckpt', type = str, default = None)
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')
     parser.add_argument('--verbose', type = str, default = 'info')
     parser.add_argument('--gpu_list', type = str, default = '0,1,2,3')
-    parser.add_argument('--batch_size', type = int, default=32)
+    parser.add_argument('--batch_size', type = int, default=128)
     parser.add_argument('--n_epochs', type = int, default=100)
     parser.add_argument('--test_freq', type = int, default=100)
     parser.add_argument('--draw_freq', type = int, default = 100)
@@ -49,10 +51,12 @@ def main():
     if not isinstance(level, int):
         raise ValueError('level {} not supported'.format(args.verbose))
 
+    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    args.device = device
+
     runner = GMVAE_runner(args)
     if args.test:
         args.test_ckpt = 'run/gmvae/15-29-24/checkpoint99.pth'
-        assert args.test_ckpt is not None
         runner.test()
     else:
         os.makedirs(args.img_dir)

@@ -53,12 +53,9 @@ class GMVAE_runner():
     def train(self):
         # model = GMVAE(v_dim = self.args.v_dim, h_dim = self.args.h_dim, w_dim = self.args.w_dim, \
             # n_classes = self.args.n_classes)
-        model = GMVAE(channels = self.args.channels, image_size = self.args.image_size, h_dim = self.args.h_dim, w_dim = self.args.w_dim, n_classes = self.args.n_classes)
-        if self.args.gpu_list is not None:
-            if len(self.args.gpu_list.split(',')) > 1:
-                model = torch.nn.DataParallel(model).cuda()
-            else:
-                model = model.cuda()
+        model = GMVAE(self.args)
+        model = torch.nn.DataParallel(model)
+        model = model.to(self.args.device)
         if isinstance(model, torch.nn.DataParallel):
             model = model.module
         optimizer = self.get_optimizer(model.parameters())
@@ -73,7 +70,7 @@ class GMVAE_runner():
         val_losses = []
 
         for epoch in range(self.args.n_epochs):
-            if (epoch + 1) % 5 == 0:
+            if (epoch + 1) % 10 == 0:
                 self.args.lr *= 0.5
                 for param_group in optimizer.param_groups:
                     param_group['lr'] = self.args.lr
@@ -81,7 +78,7 @@ class GMVAE_runner():
             for _,  (X, y) in  enumerate(self.train_loader):
                 # step += 1
                 model.train()
-                X = X.cuda()
+                X = X.to(self.args.device)
                 X = X.view(-1, self.args.channels, self.args.image_size, self.args.image_size)
                 loss, *_ = model.ELBO(X)
                 optimizer.zero_grad()
@@ -90,7 +87,7 @@ class GMVAE_runner():
 
                 if step % self.args.test_freq == 0:
                     test_X, _ = next(self.test_iter)
-                    test_X = test_X.cuda()
+                    test_X = test_X.to(self.args.device)
                     model.eval()
                     test_loss, recon_loss, kl_loss_w, kl_loss_c, kl_loss_h = model.ELBO(test_X)
                     logging.info('Test {} || recon loss:{:.2f}, loss_c:{:.5f}, loss_w:{:.5f}, loss_h:{:.5f}'.format(step, recon_loss.mean().item(), \
@@ -138,7 +135,7 @@ class GMVAE_runner():
         labels = np.array([])
         model.eval()
         for i, (val_x, val_y) in enumerate(self.test_loader):
-            val_x = val_x.cuda()
+            val_x = val_x.to(self.args.device)
             pred = model.Q.predict(val_x) # [bs, n_classes]
             q_c_v.append(pred.detach().cpu().numpy())
             labels = np.concatenate([labels, val_y])
